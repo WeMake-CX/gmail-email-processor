@@ -4,6 +4,7 @@ import re
 from email.utils import parseaddr, parsedate_to_datetime
 from email.header import decode_header
 from datetime import datetime, timezone
+from tqdm import tqdm
 
 source_dir = 'source/Gmail'
 output_dir = 'output'
@@ -65,30 +66,35 @@ BODY:
 
 emails = []
 
-for mbox_file in os.listdir(source_dir):
-    if mbox_file.endswith('.mbox'):
-        mbox = mailbox.mbox(os.path.join(source_dir, mbox_file))
-        for message in mbox:
-            date = parsedate_to_datetime(message['date']) if message['date'] else None
-            if date and date.tzinfo is None:
-                date = date.replace(tzinfo=timezone.utc)
-            sender = decode_mime_words(message['from'])
-            receiver = decode_mime_words(message['to'])
-            subject = decode_mime_words(message['subject'])
-            body = ""
-            for part in message.walk():
-                if part.get_content_type() == 'text/plain':
-                    body = part.get_payload(decode=True).decode(part.get_content_charset(), errors='replace')
-                    break
+mbox_files = [f for f in os.listdir(source_dir) if f.endswith('.mbox')]
 
-            body = normalize_text(body)
-            body = clean_text(body)
-            emails.append((date, sender, receiver, subject, body))
+for mbox_file in tqdm(mbox_files, desc="Processing mbox files"):
+    mbox = mailbox.mbox(os.path.join(source_dir, mbox_file))
+    for message in tqdm(mbox, desc=f"Processing emails in {mbox_file}", leave=False):
+        date = parsedate_to_datetime(message['date']) if message['date'] else None
+        if date and date.tzinfo is None:
+            date = date.replace(tzinfo=timezone.utc)
+        sender = decode_mime_words(message['from'])
+        receiver = decode_mime_words(message['to'])
+        subject = decode_mime_words(message['subject'])
+        body = ""
+        for part in message.walk():
+            if part.get_content_type() == 'text/plain':
+                body = part.get_payload(decode=True).decode(part.get_content_charset(), errors='replace')
+                break
+
+        body = normalize_text(body)
+        body = clean_text(body)
+        # Normalize text again after cleaning
+        body = normalize_text(body)
+        # Ensure a maximum of two consecutive line breaks
+        body = re.sub(r'\n{3,}', '\n\n', body)
+        emails.append((date, sender, receiver, subject, body))
 
 # Sort emails by date
 emails.sort(key=lambda x: x[0] if x[0] else datetime.min.replace(tzinfo=timezone.utc))
 
-for email in emails:
+for email in tqdm(emails, desc="Writing emails to files"):
     date, sender, receiver, subject, body = email
     email_id = f"EMAIL{email_counter:04d}"
     email_counter += 1
