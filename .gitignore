@@ -1,0 +1,8 @@
+# Ignore macOS system files
+.DS_Store
+
+# Ignore output directory
+output/
+
+# Ignore source directory
+source/
