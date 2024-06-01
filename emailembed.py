@@ -29,29 +29,15 @@ def decode_mime_words(s):
             decoded_string += part[0]
     return decoded_string
 
-def normalize_text(text):
-    # Replace consecutive spaces and tabs with a single space
-    text = re.sub(r'[ \t]+', ' ', text).strip()
-    # Replace sequences of more than two line breaks with exactly two line breaks
-    text = re.sub(r'\n{3,}', '\n\n', text)
-    return text
-
-def clean_text(text):
-    # Remove URLs
-    text = re.sub(r'http\S+|www\S+', '', text)
-    # Remove email addresses
-    text = re.sub(r'\S+@\S+', '', text)
-    # Remove parentheses and their content
-    text = re.sub(r'\(.*?\)', '', text)
-    # Remove standalone brackets and their content
-    text = re.sub(r'\[.*?\]', '', text)
-    # Remove standalone less-than and greater-than signs
-    text = re.sub(r'<.*?>', '', text)
-    # Remove any remaining standalone brackets and less-than/greater-than signs
-    text = re.sub(r'[\[\]<>]', '', text)
+def remove_emails_and_urls(text):
+    text = re.sub(r'<[^>]+>', '', text)  # Remove content within angle brackets
+    text = re.sub(r'\[https?://[^\]]+\]', '', text)  # Remove content within square brackets with URLs
     return text
 
 def format_email(email_id, date, sender, receiver, subject, body):
+    sender = remove_emails_and_urls(sender).replace('"', '')
+    receiver = remove_emails_and_urls(receiver).replace('"', '')
+    body = remove_emails_and_urls(body)
     return f"""*** MAIL ***
 ID: {email_id}
 DATE: {date}
@@ -61,7 +47,6 @@ SUBJECT: {subject}
 
 BODY:
 {body}
-
 """
 
 emails = []
@@ -83,12 +68,6 @@ for mbox_file in tqdm(mbox_files, desc="Processing mbox files"):
                 body = part.get_payload(decode=True).decode(part.get_content_charset(), errors='replace')
                 break
 
-        body = normalize_text(body)
-        body = clean_text(body)
-        # Normalize text again after cleaning
-        body = normalize_text(body)
-        # Ensure a maximum of two consecutive line breaks
-        body = re.sub(r'\n{3,}', '\n\n', body)
         emails.append((date, sender, receiver, subject, body))
 
 # Sort emails by date
